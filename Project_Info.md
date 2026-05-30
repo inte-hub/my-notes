@@ -46,25 +46,77 @@ The shape: business problem → why it was hard → the design choice that solve
 
 A plausible webMethods picture. Use the pieces you recognise; drop the ones that don't match what you designed.
 
-```
-  Business partners (retailers, e-commerce sellers, ...)
-   each in their own format / transport:
-   REST  |  SOAP  |  EDI over AS2  |  flat files over SFTP
-            |
-   [ API Gateway ]            [ Trading Networks ]
-   (API-based partners:       (partner profiles, document
-    auth, throttling)          recognition, processing rules,
-            \                  TPAs, EDI/AS2, audit trail)
-             \                /
-        [ Integration Server ]  -- onboarding + integration logic
-              |        \
-        canonical       [ Universal Messaging ]  -- shipment events (async)
-        shipment model     |
-              |            triggers process events per partner
-        adapters (JDBC, SFTP, JMS, SAP?)
-              |
-   Carrier back-end: consignment creation, manifesting,
-   label/tracking generation, status events, billing/settlement
+```mermaid
+flowchart TB
+    %% ================= PARTNER LAYER =================
+    subgraph PARTNERS["Business Partners"]
+        direction LR
+        P1["Retailers"]
+        P2["E-commerce sellers"]
+        P3["Other businesses"]
+    end
+
+    %% ================= TRANSPORT LAYER =================
+    REST["REST / JSON"]
+    SOAP["SOAP / XML"]
+    AS2["EDI over AS2"]
+    SFTP["Flat files over SFTP"]
+
+    PARTNERS --> REST & SOAP & AS2 & SFTP
+
+    %% ================= ENTRY / EDGE LAYER =================
+    GW["API Gateway<br/>auth · throttling · routing<br/>(API-based partners)"]
+    TN["Trading Networks<br/>partner profiles · document recognition<br/>processing rules · TPAs · EDI/AS2 · audit trail"]
+
+    REST --> GW
+    SOAP --> GW
+    AS2 --> TN
+    SFTP --> TN
+
+    %% ================= CORE INTEGRATION LAYER =================
+    IS["Integration Server<br/>onboarding + integration logic"]
+    CM["Canonical Shipment Model<br/>one internal format<br/>every partner maps to / from it"]
+    UM["Universal Messaging<br/>shipment events (async)"]
+    TR["Triggers<br/>process events per partner"]
+    AD["Adapters<br/>JDBC · SFTP · JMS · SAP"]
+
+    GW --> IS
+    TN --> IS
+    IS <--> CM
+    IS -->|publish events| UM
+    UM -->|consume| TR
+    TR --> IS
+    IS --> AD
+
+    %% ================= BACK-END LAYER =================
+    subgraph BE["Carrier Back-end"]
+        direction LR
+        B1["Consignment<br/>creation"]
+        B2["Manifesting"]
+        B3["Label / tracking<br/>generation"]
+        B4["Status events"]
+        B5["Billing /<br/>settlement"]
+    end
+
+    AD --> BE
+
+    %% ================= OUTBOUND (status back to partners) =================
+    B4 -.->|status and tracking updates| IS
+    IS -.->|outbound in partner format| PARTNERS
+
+    %% ================= STYLING =================
+    classDef partner  fill:#e8f0fe,stroke:#4285f4,color:#202124;
+    classDef transport fill:#ffffff,stroke:#9aa0a6,color:#202124,stroke-dasharray:3 3;
+    classDef edge     fill:#fef7e0,stroke:#f9ab00,color:#202124;
+    classDef core     fill:#e6f4ea,stroke:#34a853,color:#202124;
+    classDef backend  fill:#fce8e6,stroke:#ea4335,color:#202124;
+
+    class P1,P2,P3 partner;
+    class REST,SOAP,AS2,SFTP transport;
+    class GW,TN edge;
+    class IS,CM,UM,TR,AD core;
+    class B1,B2,B3,B4,B5 backend;
+
 ```
 
 ### The pieces, and what you'd say about each
